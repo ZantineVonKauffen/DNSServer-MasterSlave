@@ -1,0 +1,18 @@
+;
+; 57.168.192
+;
+$TTL    86400
+@       IN      SOA     tierra.sistema.sol. vagrant.sistema.sol. (
+                1       ; Serial
+                3600    ; Refresh
+                1800    ; Retry
+                604800  ; Expire
+                86400 ) ; Negative Cache TTL
+;
+@       IN      NS      earth.sistema.sol.
+@       IN      NS      venus.sistema.sol.
+@	IN	MX	10 marte.sistema.sol.
+103     IN      PTR     earth.sistema.sol.
+102     IN      PTR     venus.sistema.sol.
+104     IN      PTR     mars.sistema.sol.
+101     IN      PTR     mercury.sistema.sol.
