@@ -7,13 +7,13 @@
 //include "/etc/bind/zones.rfc1918";
 zone "sistema.sol" {
         type slave;
-        file "dns-slaves/sistema.sol";
+        file "/var/lib/bind/dns-slaves/sistema.sol";
         masters { 192.168.57.103; };
 };
 
 zone "57.168.192.in-addr.arpa" {
         type slave;
-        file "dns-slaves/192.168.57";
+        file "/var/lib/bind/dns-slaves/192.168.57";
         masters { 192.168.57.103; };
 };
 
