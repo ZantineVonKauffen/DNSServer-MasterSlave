@@ -42,6 +42,21 @@ Windows Mail Server | mercurio.sistema.sol | 192.168.57.104
 
 This sums it all up for the architecture of the DNS server. Taking this in mind, I proceed to configure the BIND9 service in both *tierra* and *venus*
 
+## The Activity
+
+The activity of this project consists on the following
+  - Stablish option to *dnssec-validation* **yes**
+  - Configure Venus and Tierra to be the default domain name servers in `/etc/resolv.conf`
+  - The Domain Name Server's name will be *sistema.sol*
+  - Servers will allow recursivity for devices in the networks 127.0.0.0/8 and 192.168.57.0/24
+  - The Master server will be Tierra, with authority over the direct and reverse zones
+  - The Slave server will be Venus, whose master is Tierra
+  - TTL in cache for Negative answrs will be of 2 hours (7200 seconds)
+  - All queries for which the server is not authorized to answer will be redirected to 208.67.222.222
+  - Tierra will have alias *ns1.sistema.sol* and Venus will have alias *ns2.sistema.sol*
+  - *mail.sistema.sol* will be Marte's alias
+  - Device *marte.sistema.sol* will be the domain server's mail exchange server
+
 ## Instalation
 
 The installation process is very smooth, given that Vagrant installs and boots up both computers automatically.  
@@ -99,7 +114,7 @@ The files that are needed for this activity are `/etc/bind/named.conf.options` a
 The first step is to configure `/etc/bind/named.conf.options` for both machines, so let's begin with *tierra*  
 `/etc/bind/named.conf.options`  
 
-    #this acl is a unit that stores the trusted IP addresses of the configuration. This is used to simplify writting
+    #this acl is a unit that stores the trusted IP addresses for recursion, simplifying writting later on
     acl trusty {
     	192.168.57.0/24;
     	192.168.57.102;
@@ -171,7 +186,7 @@ Remember, Tierra is the master of this configuration, so the files will be sligh
             allow-transfer { 192.168.57.102; }; #again, transfers all the configuration to the salve, Venus
     };
 
-As it can be seen, the Master-Slave relationship between Tierra and Venus is making itself more visible now. But, what does it mean that the *transfer* is allowed between Tierra and Venus? It means that Venus does not have its own registry resource files, but rather, uses tierra's, which are transfered to Venus. Venus does have its own files to hold this information, though, because if it was not stored somewhere, it would make no sense.  
+As it can be seen, the Master-Slave relationship between Tierra and Venus is making itself more visible now. But, what does it mean that the *transfer* is allowed between Tierra and Venus? It means that Venus does not have its own resource registry files, but rather, uses tierra's, which are transfered to Venus. Venus does have its own files to hold this information, though, because if it was not stored somewhere, it would make no sense.  
 
 Now, this is Venus' `/etc/bind/named.conf.local` 
 
@@ -183,8 +198,83 @@ Now, this is Venus' `/etc/bind/named.conf.local`
     
     zone "57.168.192.in-addr.arpa" {
             type slave;
-            file "/var/lib/bind/dns-slaves/192.168.57"; #This is the path to the file that stores the transfered registry resources from tierra that will be used by venus. It slightly differs from tierra's to make it more visible its a dependency
+            file "/var/lib/bind/dns-slaves/192.168.57"; #This is the path to the file that stores the transfered resource registries from tierra that will be used by venus. It slightly differs from tierra's to make it more visible its a dependency
             masters { 192.168.57.103; };
     };
     
-Now that both files have been configured for Tierra and Venus, the Resource Regitries must be defined. Bind comes with a file that contains the template to do this by just coping its content into another new file that will be that new registry. The registr has the following structure, which I will explain again using commented code and some extra data outside the code. Let's see
+Now that all files have been configured for Tierra and Venus, the Resource Regitries must be defined. Bind comes with a file that contains the template to do this by just coping its content into another new file that will be that new registry. The registry has the following structure, which I will explain again using commented code and some extra data outside the code.  
+The files to be created are `/var/lib/bind/sistema.sol.dns` and `/var/lib/bind/sistema.sol.rev`  
+
+`/var/lib/bind/sistema.sol.dns`
+
+    ;
+    ;       sistema.sol
+    ;
+    $TTL    86400
+    @    IN  SOA tierra.sistema.sol. vagrant.sistema.sol. (
+                    1       ; Serial
+                    3600    ; Refresh
+                    1800    ; Retry
+                    604800  ; Expire
+                    7200 )  ; Negative Cache TTL
+    ;
+    @               IN      NS      tierra.sistema.sol.
+    @               IN      NS      venus.sistema.sol.
+    tierra.sistema.sol.     IN      A       192.168.57.103
+    venus.sistema.sol.      IN      A       192.168.57.102
+    marte.sistema.sol.      IN      A       192.168.57.104
+    mercurio.sistema.sol.   IN      A       192.168.57.101
+    ns1.sistema.sol.        IN      CNAME   tierra.sistema.sol.
+    ns2.sistema.sol.        IN      CNAME   venus.sistema.sol.
+    mail.sistema.sol.       IN      CNAME   marte.sistema.sol.
+    sistema.sol.            IN      MX      10 marte.sistema.sol.
+
+There are many elements in this files, so I will go through them one after the other in order  
+
+- $TTL refers to the time to live of each request, followed by the amount in seconds for the TTL
+- @ refers to this domain, its to refer to itself
+- SOA refers to Star of Authority, it defines the server type and the main characteristics it posseses, followed by the FQDN of the Master Server for the domain (tierra.sistema.sol.), then the administrative user's email (vagrant.sistema.sol. in this case)
+- Inside the () there are some parameters that were defined
+    - Serial refers to the version number of the zone file, this number will be incremented each time it is modified, letting the slave servers know when they have to refresh their transfers
+    - Refresh indicates the lapse of time for slave servers to contact their master to check if the zone file has changed
+    - Retry serves the same purpose as refresh, stating how much time it has to pass for slave servers to try and contact the master if it is not responding
+    - Expire refers to the amount of time the slaves will keep their zone configuration before discarding it and unabling themselves from operating. This happens only if the master server does not contact back
+    - Negative cache TTL refers to the amount of time negative answers will be stored in this zone before being discarded. In this activity, this parameter had to be set to two hours (7200 seconds)  
+- The next parameters refer to the elements in the server, these registries indicate specific information about the devices connected to this configuration
+    - @ IN NS  Is used to declare the authorized servers for this zone. Each zone must contain at least one master server. This configuration has two Name Servers, the master Tierra and slave Venus. Their FDQNs are declared
+    - (FDQN) IN A (IP address) is used to declare the IP Address that belongs to each device. In this case, we have 4 elements with IP addresses that correspond to each device in the configuration. Each has been declared and linked to their IP address in the registry
+    - The CNAME registry is used to assign an alias to a domain name previously declared. In this case, the aliases ns1, ns2 and mail were assigned respectively to tierra, venus and martes as was requested by the activity
+    - MX is the registry used to define the devices assigned to mail services in the domain. Marte was required to be the mail exchange device in this configuration.
+
+As it can be seen, the configuration follows the requirements made by the activity, with each device having its corresponding assignment.  
+
+For the reverse zone, there is a similar syntax, but with slight changes to it, since only the Name Servers have to be defined, and the IP addresses have to be linked to their respectie FDQNs.  
+
+    ;
+    ; 57.168.192
+    ;
+    $TTL    86400
+    @       IN      SOA     tierra.sistema.sol. vagrant.sistema.sol. (
+                    1       ; Serial
+                    3600    ; Refresh
+                    1800    ; Retry
+                    604800  ; Expire
+                    7200 ) ; Negative Cache TTL
+    ;
+    @       IN      NS      tierra.sistema.sol.
+    @       IN      NS      venus.sistema.sol.
+    @	IN	MX	10 marte.sistema.sol.
+    103     IN      PTR     tierra.sistema.sol.
+    102     IN      PTR     venus.sistema.sol.
+    104     IN      PTR     marte.sistema.sol.
+    101     IN      PTR     mercurio.sistema.sol.
+
+In this case, we can see that the SOA registry is still the same, including he NS registries indicating the NS of the zone, which are still Tierra and Venus. Even the MX registry is the same.  
+The difference comes at having to use the PTR registry, because, since we are defining the reverse lookup zone, resolvs in this way look for domain names based on IP addresses, so we use PTR to indicate to which domain name each IP address points.  
+Each IP address points to its respective device.  
+The last step in this activity is to issue command `sudo systemctl restart bind9` so that the service is restarted and the configuration reloaded.  
+
+
+## Conclusion
+
+To conclude this document, all the cofiguration that was discussed above can be found inside this repository and can be exported via Vagrant. The VagrantFile can be used in an initialized folder to `up` two vagrant computers ready to run the DNS server. In this initialized folder, drag the configuration files for the Master and Slave separatedly and then proceed to export them to their respective machines. The initialized vagrant folder is automatically a shared folder for both computers to access, so there will be no problems in this regard. Copy the configuration files with the intent to overwrite the ones in the computers, then reload the configuration. Finally, use the scripts, either the Linux one or the .bat one in Windows to test if the configuration is correct. Be warned that the Linux bash script isn't functional as of now, and you will require a bridged adapter for each computer to run the .bat file if you want the Host computer to be able to access the DNS server. Remember, the DNS configuration was built for an intranetwork. This summs up all this work, I tested all the possible resolvs manually since I could't get the scripts to work properly, but at least I know that there are no mistakes regarding the configuration, as all lookups and digs returned their correct answers.
