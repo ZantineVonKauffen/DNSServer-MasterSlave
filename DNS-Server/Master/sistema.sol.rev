@@ -9,10 +9,10 @@ $TTL    86400
                 604800  ; Expire
                 86400 ) ; Negative Cache TTL
 ;
-@       IN      NS      earth.sistema.sol.
+@       IN      NS      tierra.sistema.sol.
 @       IN      NS      venus.sistema.sol.
 @	IN	MX	10 marte.sistema.sol.
-103     IN      PTR     earth.sistema.sol.
+103     IN      PTR     tierra.sistema.sol.
 102     IN      PTR     venus.sistema.sol.
-104     IN      PTR     mars.sistema.sol.
-101     IN      PTR     mercury.sistema.sol.
+104     IN      PTR     marte.sistema.sol.
+101     IN      PTR     mercurio.sistema.sol.
